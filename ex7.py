@@ -1,3 +1,4 @@
+import csv
 import time
 from urllib.parse import urljoin, urlparse, urldefrag
 
@@ -68,3 +69,11 @@ while url_list:
 
 print("武蔵野大学サイトのURLとタイトル")
 print(page_title)
+
+with open("musashino_site_map.csv", "w", newline="", encoding="utf-8-sig") as f:
+    writer = csv.writer(f)
+    writer.writerow(["URL", "title"])
+    for url, title in page_title.items():
+        writer.writerow([url, title])
+
+print("musashino_site_map.csv に保存しました")
