@@ -1,79 +1,88 @@
 import csv
 import time
-from urllib.parse import urljoin, urlparse, urldefrag
+from urllib.parse import urldefrag, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-# 練習問題：映画出演ページから作品名を集める
+
+def get_page(url):
+    """ページにアクセスする前に6秒待つ。"""
+    time.sleep(6)
+    return requests.get(url, timeout=20)
+
+
+def save_csv(page_title):
+    """現在までに取得したURLとタイトルをCSVに保存する。"""
+    with open("musashino_site_map.csv", "w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file)
+        writer.writerow(["URL", "title"])
+        for url, title in page_title.items():
+            writer.writerow([url, title])
+
+
+# 練習問題：阿部寛さんの映画出演ページから作品名を集める
 movie_url = "http://abehiroshi.la.coocan.jp/movie/eiga.htm"
-movie_res = requests.get(movie_url, timeout=20)
-movie_res.encoding = "shift_jis"
-movie_soup = BeautifulSoup(movie_res.text, "html.parser")
+try:
+    movie_res = get_page(movie_url)
+    movie_res.encoding = movie_res.apparent_encoding
+    movie_soup = BeautifulSoup(movie_res.text, "html.parser")
 
-print("阿部寛さんの映画出演タイトル")
-for link in movie_soup.select("a"):
-    title = link.get_text(strip=True)
-    if title:
-        print(title)
+    print("阿部寛さんの映画出演タイトル")
+    for link in movie_soup.select("a"):
+        title = link.get_text(strip=True)
+        if title:
+            print(title)
+except requests.RequestException as error:
+    print(f"映画ページにアクセスできません: {error}")
 
-# 個別課題：武蔵野大学の同じドメインを調べる
+
+# 個別課題：武蔵野大学トップページから同じドメインのリンクを調べる
 start_url = "https://www.musashino-u.ac.jp/"
 domain = urlparse(start_url).netloc
-url_list = [start_url]
-checked_url = set()
 page_title = {}
 
-# 別のサイトへ続けてアクセスしないよう、ここでも待つ
-time.sleep(6)
+try:
+    home_res = get_page(start_url)
+    home_res.encoding = home_res.apparent_encoding
+    home_soup = BeautifulSoup(home_res.text, "html.parser")
+except requests.RequestException as error:
+    print(f"大学トップページにアクセスできません: {error}")
+    raise SystemExit(1)
 
-while url_list:
-    url = url_list.pop(0)
-    url, _ = urldefrag(url)
+if home_soup.title is not None:
+    page_title[start_url] = home_soup.title.get_text(strip=True)
+    save_csv(page_title)
 
-    if url in checked_url:
-        continue
-    checked_url.add(url)
+# トップページにある同じドメインのURLを重複しないように集める
+url_list = []
+for link in home_soup.select("a[href]"):
+    next_url = urljoin(start_url, link.get("href"))
+    next_url, _ = urldefrag(next_url)
+    if urlparse(next_url).netloc == domain and next_url not in url_list:
+        url_list.append(next_url)
 
-    # 2ページ目以降は6秒待ってからアクセスする
-    if len(checked_url) > 1:
-        time.sleep(6)
+print(f"トップページから見つかった同じドメインのリンク: {len(url_list)}件", flush=True)
 
+# 各リンク先を6秒間隔で確認し、取得したタイトルをその都度CSVに保存する
+for number, url in enumerate(url_list, start=1):
     try:
-        res = requests.get(url, timeout=20)
+        res = get_page(url)
     except requests.RequestException as error:
-        print(f"アクセスできません: {url} ({error})")
+        print(f"{number}/{len(url_list)} アクセス失敗: {url} ({error})", flush=True)
         continue
 
     if urlparse(res.url).netloc != domain:
+        print(f"{number}/{len(url_list)} 別ドメインへ移動したため除外: {url}", flush=True)
         continue
-
-    content_type = res.headers.get("Content-Type", "")
-    if "text/html" not in content_type:
+    if "text/html" not in res.headers.get("Content-Type", ""):
+        print(f"{number}/{len(url_list)} HTMLではないため除外: {url}", flush=True)
         continue
 
     res.encoding = res.apparent_encoding
     soup = BeautifulSoup(res.text, "html.parser")
+    page_title[url] = soup.title.get_text(strip=True) if soup.title else ""
+    save_csv(page_title)
+    print(f"{number}/{len(url_list)} 取得済み: {url}", flush=True)
 
-    if soup.title is not None:
-        page_title[url] = soup.title.get_text(strip=True)
-    else:
-        page_title[url] = ""
-
-    for link in soup.select("a[href]"):
-        next_url = urljoin(url, link.get("href"))
-        next_url, _ = urldefrag(next_url)
-        if urlparse(next_url).netloc == domain and next_url not in checked_url:
-            if next_url not in url_list:
-                url_list.append(next_url)
-
-print("武蔵野大学サイトのURLとタイトル")
-print(page_title)
-
-with open("musashino_site_map.csv", "w", newline="", encoding="utf-8-sig") as f:
-    writer = csv.writer(f)
-    writer.writerow(["URL", "title"])
-    for url, title in page_title.items():
-        writer.writerow([url, title])
-
-print("musashino_site_map.csv に保存しました")
+print(f"完了: {len(page_title)}ページのURLとタイトルを musashino_site_map.csv に保存しました")
