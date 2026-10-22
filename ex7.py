@@ -19,7 +19,8 @@ def get_page(url):
     time.sleep(WAIT_SECONDS)
     try:
         response = requests.get(url, timeout=30)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            print(f"HTTP {response.status_code}: {url}", flush=True)
         response.encoding = response.apparent_encoding
         return response
     except requests.RequestException as error:
