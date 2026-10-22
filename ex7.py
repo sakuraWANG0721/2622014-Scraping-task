@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 START_URL = "https://www.musashino-u.ac.jp/"
 MOVIE_URL = "http://abehiroshi.la.coocan.jp/movie/eiga.htm"
 CSV_FILE = "musashino_site_map.csv"
-WAIT_SECONDS = 1
+WAIT_SECONDS = 0.5
 SAVE_EVERY = 25
 
 
