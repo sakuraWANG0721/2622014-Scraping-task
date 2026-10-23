@@ -96,7 +96,7 @@ def crawl_site():
         request_count += 1
 
         response = get_page(url)
-        if response is None:
+        if response is None or response.status_code >= 400:
             page_titles[url] = ""
         else:
             page_url = urldefrag(response.url)[0]
